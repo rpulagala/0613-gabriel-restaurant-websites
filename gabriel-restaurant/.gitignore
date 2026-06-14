@@ -45,6 +45,9 @@ next-env.d.ts
 # local test artifacts
 ss-*.png
 test-order-flow.js
+check-db.ts
+check-db.mjs
+e2e-screenshots/
 
 .vercel
 .env*
