@@ -2,26 +2,30 @@
 
 Online pickup ordering for Gabriel's Chinese restaurant. Customers browse the menu, place orders, and pay via Stripe. Staff manage order status through a protected dashboard.
 
+**Live demo:** https://gabriel-restaurant.vercel.app  
+**Staff dashboard:** https://gabriel-restaurant.vercel.app/dashboard/login
+
 ## Tech Stack
 
 | Layer | Choice |
 |---|---|
 | Framework | Next.js 16 (App Router, Turbopack) |
-| Database | PostgreSQL via Prisma 7 + `@prisma/adapter-pg` |
+| Database | Neon Postgres via Prisma 7 + `@prisma/adapter-pg` |
 | Auth | NextAuth.js v5 (Credentials — staff only) |
 | Payments | Stripe (PaymentIntents + webhook) |
 | Email | Resend |
 | Styling | Tailwind CSS v4 |
 | Validation | Zod 4 |
+| Hosting | Vercel (production) |
 
 ## Prerequisites
 
 - Node.js 18+
-- PostgreSQL database (local or hosted)
+- PostgreSQL database (local or hosted — see options below)
 - Stripe account (test keys are fine)
 - Resend account (for confirmation emails)
 
-## Setup
+## Local Setup
 
 ```bash
 cd gabriel-restaurant
@@ -81,6 +85,16 @@ npm run build && npm start           # production build
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 
+## E2E Tests
+
+A Playwright test suite runs the full customer + staff flows against the deployed Vercel app:
+
+```bash
+node e2e-vercel.js
+```
+
+Covers: homepage, menu categories, add to cart, checkout, order success, dashboard login, active orders, completed orders. Screenshots saved to `e2e-screenshots/`.
+
 ## Payment Testing Bypass
 
 Stripe payment processing is currently **commented out** in `app/api/orders/route.ts` for easier testing. Orders are immediately marked `NEW` and appear on the dashboard without requiring a real Stripe transaction.
@@ -102,14 +116,50 @@ Default seed credentials:
 
 ## Menu Data
 
-`prisma/seed.ts` contains representative placeholder prices. Replace item names and prices with the actual Sizzling Wok menu before going live. The seed covers 13 categories and 55 items.
+`prisma/seed.ts` contains representative placeholder prices. Replace item names and prices with the actual Sizzling Wok menu before going live. The seed covers 13 categories and ~52 items.
 
-## Deployment
+## Deployment (Vercel + Neon)
 
-The app is standard Next.js and deploys to any Node.js host:
+The production app runs on Vercel with a Neon Postgres database provisioned via the Vercel Marketplace.
 
-- **Vercel** — zero config; set env vars in the dashboard; use Vercel Postgres or an external DB
-- **Railway / Render** — add a Postgres service alongside the web service
-- **Self-hosted** — `npm run build && npm start`, reverse-proxy with nginx
+### First-time deploy
 
-Set `NEXTAUTH_URL` and `AUTH_URL` to your production domain. Remove `AUTH_TRUST_HOST=true` if you're behind a trusted proxy that already sets the `Host` header correctly.
+```bash
+npm i -g vercel
+vercel login
+vercel link                          # link to project
+vercel integration add neon          # provision Neon DB + inject DATABASE_URL
+```
+
+Add remaining env vars to Vercel production:
+
+```bash
+# Auth — write values to a file first to avoid PowerShell BOM encoding issues
+echo -n "your-secret" > tmp.txt && npx vercel env add NEXTAUTH_SECRET production < tmp.txt
+echo -n "https://your-domain.vercel.app" > tmp.txt
+npx vercel env add NEXTAUTH_URL production < tmp.txt
+npx vercel env add AUTH_URL production < tmp.txt
+echo -n "true" > tmp.txt && npx vercel env add AUTH_TRUST_HOST production < tmp.txt
+# ... repeat for STRIPE_*, RESEND_API_KEY, RESTAURANT_* vars
+rm tmp.txt
+```
+
+> **PowerShell BOM warning:** Using `echo $var | vercel env add ...` in PowerShell pipes a UTF-8 BOM character into the value. This causes `TypeError: Invalid URL` in NextAuth at runtime. Always use file redirection (`< file`) or the Vercel dashboard to set string env vars from PowerShell.
+
+Push schema and seed data:
+
+```bash
+# Use DATABASE_URL_UNPOOLED from .env.local for schema push
+DATABASE_URL=<unpooled-url> npx prisma db push
+npx prisma db seed
+```
+
+Deploy:
+
+```bash
+npx vercel --prod
+```
+
+### Subsequent deploys
+
+Git push to `main` triggers auto-deploy via Vercel's GitHub integration.

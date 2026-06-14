@@ -4,12 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-The app is **fully built and tested** in the `gabriel-restaurant/` subdirectory.
+The app is **fully built, tested, and deployed** in the `gabriel-restaurant/` subdirectory.
+
+**Production URL:** https://gabriel-restaurant.vercel.app  
+**Hosting:** Vercel (auto-deploys from `main` branch)  
+**Database:** Neon Postgres (provisioned via Vercel Marketplace integration)
 
 To run it fresh on a new machine:
 1. Copy `.env.local` with real credentials (see README)
 2. `npx prisma generate`
-3. `npx prisma migrate dev --name init` (or `prisma db push` with a local Prisma dev DB)
+3. `npx prisma db push` (against Neon unpooled URL) or `prisma migrate dev --name init` (local)
 4. `npx prisma db seed`
 5. Replace placeholder prices in `prisma/seed.ts` with actual Sizzling Wok menu data
 
@@ -19,7 +23,7 @@ To run it fresh on a new machine:
 
 ```bash
 npm run dev          # Dev server on http://localhost:3000 (Turbopack)
-npm run build        # Production build
+npm run build        # Production build (runs prisma generate first)
 npm run lint         # ESLint
 
 npx prisma migrate dev --name <name>   # Apply schema changes + regenerate client
@@ -27,6 +31,8 @@ npx prisma generate                    # Regenerate Prisma client without migrat
 npx prisma db seed                     # Seed menu items + admin user
 npx prisma studio                      # Browser UI to inspect DB
 npx prisma dev                         # Start bundled local Postgres (no Docker needed)
+
+node e2e-vercel.js                     # Playwright E2E tests against production Vercel URL
 
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
@@ -79,15 +85,33 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
 **Validation:** Phone must match `/^\d{10}$/`. Zod schemas in `lib/validations.ts`.
 
+**`force-dynamic` on DB pages:** All pages that query the DB at render time must export `export const dynamic = 'force-dynamic'` to prevent Vercel from trying to statically render them at build time (which has no DB connection).
+
+**Stripe init guard:** `lib/stripe.ts` uses `process.env.STRIPE_SECRET_KEY ?? 'sk_test_placeholder'` so the module doesn't throw at build time when the key isn't present.
+
+## Deployment (Vercel + Neon)
+
+**PowerShell BOM bug:** Using `echo $var | vercel env add ...` in PowerShell prepends a UTF-8 BOM (`﻿`) to the value. This causes `TypeError: Invalid URL` in NextAuth at runtime (observed on `NEXTAUTH_URL` / `AUTH_URL`). Always use file redirection to set env vars from PowerShell:
+```powershell
+[System.IO.File]::WriteAllText("tmp.txt", "https://your-app.vercel.app", [System.Text.UTF8Encoding]::new($false))
+cmd /c "npx vercel env add NEXTAUTH_URL production < tmp.txt"
+Remove-Item tmp.txt
+```
+
+**Neon connection strings:** Neon provides two URLs — pooled (for app queries) and unpooled (for migrations/schema push). `prisma db push` must use the unpooled URL. The pooled URL works for all runtime queries.
+
+**Build script:** `package.json` build is `prisma generate && next build` so the Prisma client is always regenerated on Vercel before the Next.js build.
+
 ## Environment Variables
 
-Required in `.env.local`:
+Required in `.env.local` (for local dev) and Vercel production:
 
 ```
-DATABASE_URL
+DATABASE_URL               # Neon pooled connection string
+DATABASE_URL_UNPOOLED      # Neon direct connection (for prisma db push)
 NEXTAUTH_SECRET
-NEXTAUTH_URL
-AUTH_URL
+NEXTAUTH_URL               # https://your-domain.vercel.app (production)
+AUTH_URL                   # same as NEXTAUTH_URL
 AUTH_TRUST_HOST=true
 STRIPE_SECRET_KEY
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
@@ -102,6 +126,8 @@ NEXT_PUBLIC_RESTAURANT_PHONE
 NEXT_PUBLIC_RESTAURANT_ADDRESS
 ```
 
+Neon also injects `POSTGRES_*` and `PGHOST` vars — these are unused by the app but present in the environment.
+
 ## Seed Data
 
-Admin credentials: `admin@restaurant.com` / `admin123` — change before production. Menu has 55 placeholder items across 13 categories. Replace with actual Sizzling Wok prices before go-live.
+Admin credentials: `admin@restaurant.com` / `admin123` — change before production. Menu has ~52 placeholder items across 13 categories. Replace with actual Sizzling Wok prices before go-live.
