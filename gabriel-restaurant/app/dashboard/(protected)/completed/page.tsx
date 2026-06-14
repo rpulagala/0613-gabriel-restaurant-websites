@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { prisma } from '@/lib/prisma'
 import { OrdersTable } from '@/components/dashboard/OrdersTable'
 import { RefreshButton } from '@/components/dashboard/RefreshButton'

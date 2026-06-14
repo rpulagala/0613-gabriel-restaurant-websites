@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { prisma } from '@/lib/prisma'
 import { MenuBrowser } from '@/components/menu/MenuBrowser'
 import { Header } from '@/components/layout/Header'
