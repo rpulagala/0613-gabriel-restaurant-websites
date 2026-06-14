@@ -45,3 +45,6 @@ next-env.d.ts
 # local test artifacts
 ss-*.png
 test-order-flow.js
+
+.vercel
+.env*
