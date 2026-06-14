@@ -1,36 +1,115 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sizzling Wok — Online Ordering System
 
-## Getting Started
+Online pickup ordering for Gabriel's Chinese restaurant. Customers browse the menu, place orders, and pay via Stripe. Staff manage order status through a protected dashboard.
 
-First, run the development server:
+## Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| Database | PostgreSQL via Prisma 7 + `@prisma/adapter-pg` |
+| Auth | NextAuth.js v5 (Credentials — staff only) |
+| Payments | Stripe (PaymentIntents + webhook) |
+| Email | Resend |
+| Styling | Tailwind CSS v4 |
+| Validation | Zod 4 |
+
+## Prerequisites
+
+- Node.js 18+
+- PostgreSQL database (local or hosted)
+- Stripe account (test keys are fine)
+- Resend account (for confirmation emails)
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cd gabriel-restaurant
+npm install
+npx prisma generate          # generate Prisma client
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copy `.env.local.example` to `.env.local` and fill in all values (see [Environment Variables](#environment-variables) below).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx prisma migrate dev --name init   # create tables
+npx prisma db seed                   # seed menu + admin user
+npm run dev                          # http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+> **No PostgreSQL locally?** Run `npx prisma dev` first — it starts a bundled local Postgres instance. Then use the printed connection URL as `DATABASE_URL` and run `prisma db push` instead of `migrate dev`.
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+Create `gabriel-restaurant/.env.local`:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```env
+# Database
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/gabriel_restaurant
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Auth
+NEXTAUTH_SECRET=          # openssl rand -base64 32
+NEXTAUTH_URL=http://localhost:3000
+AUTH_URL=http://localhost:3000
+AUTH_TRUST_HOST=true
 
-## Deploy on Vercel
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...   # stripe listen --print-secret
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# Email
+RESEND_API_KEY=re_...
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+# Restaurant info (shown in UI and emails)
+RESTAURANT_NAME=Sizzling Wok
+RESTAURANT_PHONE=(847) 555-0100
+RESTAURANT_ADDRESS=Schaumburg, IL 60010
+RESTAURANT_EMAIL=info@sizzlingwok.com
+NEXT_PUBLIC_RESTAURANT_NAME=Sizzling Wok
+NEXT_PUBLIC_RESTAURANT_PHONE=(847) 555-0100
+NEXT_PUBLIC_RESTAURANT_ADDRESS=Schaumburg, IL 60010
+```
+
+## Running Locally
+
+```bash
+npm run dev                          # dev server (Turbopack)
+npm run build && npm start           # production build
+
+# In a second terminal (for real Stripe payments):
+stripe listen --forward-to localhost:3000/api/webhooks/stripe
+```
+
+## Payment Testing Bypass
+
+Stripe payment processing is currently **commented out** in `app/api/orders/route.ts` for easier testing. Orders are immediately marked `NEW` and appear on the dashboard without requiring a real Stripe transaction.
+
+To re-enable real payments:
+1. Remove the TESTING block at the top of `POST /api/orders`
+2. Uncomment the Stripe PaymentIntent code below it
+3. Start the Stripe webhook listener (see above)
+
+## Staff Dashboard
+
+URL: `/dashboard/login`
+
+Default seed credentials:
+- Email: `admin@restaurant.com`
+- Password: `admin123`
+
+**Change these before going to production** — update `prisma/seed.ts` or directly in the database.
+
+## Menu Data
+
+`prisma/seed.ts` contains representative placeholder prices. Replace item names and prices with the actual Sizzling Wok menu before going live. The seed covers 13 categories and 55 items.
+
+## Deployment
+
+The app is standard Next.js and deploys to any Node.js host:
+
+- **Vercel** — zero config; set env vars in the dashboard; use Vercel Postgres or an external DB
+- **Railway / Render** — add a Postgres service alongside the web service
+- **Self-hosted** — `npm run build && npm start`, reverse-proxy with nginx
+
+Set `NEXTAUTH_URL` and `AUTH_URL` to your production domain. Remove `AUTH_TRUST_HOST=true` if you're behind a trusted proxy that already sets the `Host` header correctly.
