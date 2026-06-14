@@ -85,15 +85,25 @@ npm run build && npm start           # production build
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
 
+## Mobile Support
+
+The app is fully responsive. Key mobile-specific behaviours:
+
+- **Login page** — full-screen white layout on mobile (floating card on desktop); `text-base` inputs prevent iOS auto-zoom on focus; restaurant name shown at top for branding
+- **Dashboard nav** — bottom tab bar (Active Orders / Completed / Sign Out) on mobile; sidebar on desktop (`sm:`)
+- **Orders list** — tap-friendly cards on mobile showing order #, customer, items, time, total, and status badge; full table on desktop (`md:`)
+- **Order detail modal** — slides up as a bottom sheet on mobile; centered dialog on desktop
+
+Tested with Playwright on iPhone 14 (390px) and Pixel 5 (393px) — 26/26 tests pass.
+
 ## E2E Tests
 
-A Playwright test suite runs the full customer + staff flows against the deployed Vercel app:
-
 ```bash
-node e2e-vercel.js
+node e2e-vercel.js       # desktop flows (14 tests)
+node e2e-mobile.js       # iPhone 14 + Pixel 5 (26 tests)
 ```
 
-Covers: homepage, menu categories, add to cart, checkout, order success, dashboard login, active orders, completed orders. Screenshots saved to `e2e-screenshots/`.
+Both suites run against the live Vercel URL. Screenshots saved to `e2e-screenshots/`.
 
 ## Payment Testing Bypass
 
